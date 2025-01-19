@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Challenge Paris Sportifs</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+        }
+        .gradient-bg {
+            background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        }
+        .btn {
+            transition: all 0.3s ease;
+        }
+        .btn:active {
+            transform: scale(0.98);
+        }
+        .projection-card {
+            transition: all 0.3s ease;
+        }
+        .projection-card:hover {
+            transform: translateY(-2px);
+        }
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-50 to-purple-50 min-h-screen">
+    <div class="max-w-md mx-auto p-4 space-y-6">
+        <!-- Header -->
+        <div class="gradient-bg rounded-xl p-6 text-white shadow-lg">
+            <h1 class="text-3xl font-bold mb-4">Challenge Paris Sportifs</h1>
+            <div class="bg-white/20 rounded-lg p-4">
+                <label class="block text-sm font-medium mb-2">
+                    Mise initiale (€)
+                </label>
+                <input 
+                    type="number" 
+                    id="miseInitiale"
+                    class="w-full p-3 rounded-lg bg-white/90 text-gray-800 font-medium text-lg"
+                    value="10"
+                >
+            </div>
+        </div>
+
+        <!-- Projections -->
+        <div class="bg-white/80 backdrop-blur-lg rounded-xl p-6 shadow-lg">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">Projections des gains</h2>
+            <div id="projections" class="grid grid-cols-5 gap-3"></div>
+        </div>
+
+        <!-- Nouveau pari -->
+        <div class="glass-effect rounded-xl p-6 shadow-lg border border-indigo-100">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">Nouveau pari</h2>
+            <div class="space-y-4">
+                <div class="bg-white/50 rounded-lg p-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Match 1
+                    </label>
+                    <input
+                        id="match1Description"
+                        placeholder="Description du match"
+                        class="w-full p-3 rounded-lg border border-indigo-200 mb-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                    <input
+                        id="match1Cote"
+                        placeholder="Cote"
+                        type="number"
+                        step="0.01"
+                        class="w-full p-3 rounded-lg border border-indigo-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                </div>
+                
+                <div class="bg-white/50 rounded-lg p-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                        Match 2 (optionnel)
+                    </label>
+                    <input
+                        id="match2Description"
+                        placeholder="Description du match"
+                        class="w-full p-3 rounded-lg border border-indigo-200 mb-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                    <input
+                        id="match2Cote"
+                        placeholder="Cote"
+                        type="number"
+                        step="0.01"
+                        class="w-full p-3 rounded-lg border border-indigo-200 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                </div>
+                
+                <button
+                    onclick="addBet()"
+                    class="btn w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white p-4 rounded-lg font-semibold shadow-lg hover:from-indigo-700 hover:to-purple-700 transition-all duration-300"
+                >
+                    Ajouter le pari
+                </button>
+            </div>
+        </div>
+
+        <!-- Liste des paris -->
+        <div id="betsList" class="space-y-4"></div>
+    </div>
+
+    <script>
+        let bets = [];
+        let mise = 10;
+
+        function validateOdds(match1, match2) {
+            if (!match1) return false;
+            const totalOdds = match2 ? match1 * match2 : match1;
+            return totalOdds >= 1.58 && totalOdds <= 1.87;
+        }
+
+        function validateIndividualOdd(odd) {
+            const numOdd = parseFloat(odd);
+            return numOdd >= 1.25 && numOdd <= 1.82;
+        }
+
+        function calculateProjections() {
+            let projection = mise;
+            return Array.from({ length: 10 }, (_, i) => {
+                projection *= 1.7;
+                return Math.round(projection * 100) / 100;
+            });
+        }
+
+        function updateProjections() {
+            const projectionsDiv = document.getElementById('projections');
+            const wonBets = bets.filter(b => b.status === 'won').length;
+            const projections = calculateProjections();
+
+            projectionsDiv.innerHTML = projections.map((proj, i) => `
+                <div class="projection-card p-3 rounded-xl text-center shadow-sm ${
+                    i < wonBets
+                        ? 'bg-gradient-to-br from-emerald-400 to-green-500 text-white'
+                        : i === wonBets
+                        ? 'bg-gradient-to-br from-violet-500 to-purple-600 text-white ring-2 ring-purple-200'
+                        : 'bg-white/80 text-gray-800'
+                }">
+                    <div class="text-xs font-medium">Étape</div>
+                    <div class="text-xl font-bold mb-1">#${i + 1}</div>
+                    <div class="font-semibold">${proj}€</div>
+                </div>
+            `).join('');
+        }
+
+        function updateBetsList() {
+            const betsListDiv = document.getElementById('betsList');
+            betsListDiv.innerHTML = bets.map((bet, index) => `
+                <div class="glass-effect rounded-xl p-6 shadow-lg border border-indigo-100">
+                    <div class="flex justify-between items-start mb-2">
+                        <div>
+                            <div class="flex items-center gap-2 mb-2">
+                                <h3 class="text-lg font-semibold text-gray-800">Pari #${index + 1}</h3>
+                                ${bet.status === 'won' 
+                                    ? '<span class="px-2 py-1 bg-green-100 text-green-800 rounded-full text-sm">Gagné</span>'
+                                    : bet.status === 'lost'
+                                    ? '<span class="px-2 py-1 bg-red-100 text-red-800 rounded-full text-sm">Perdu</span>'
+                                    : '<span class="px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm">En attente</span>'
+                                }
+                            </div>
+                            <div class="space-y-1">
+                                <p class="text-sm text-gray-600">
+                                    <span class="font-medium">Match 1:</span> 
+                                    ${bet.match1.description} 
+                                    <span class="text-indigo-600 font-medium">(${bet.match1.cote})</span>
+                                </p>
+                                ${bet.match2.description ? `
+                                    <p class="text-sm text-gray-600">
+                                        <span class="font-medium">Match 2:</span> 
+                                        ${bet.match2.description} 
+                                        <span class="text-indigo-600 font-medium">(${bet.match2.cote})</span>
+                                    </p>
+                                ` : ''}
+                                <p class="text-sm font-medium text-gray-800">
+                                    Cote totale: <span class="text-indigo-600">${bet.totalOdd}</span>
+                                </p>
+                            </div>
+                        </div>
+                        ${bet.status === 'pending' ? `
+                            <div class="flex gap-2">
+                                <button
+                                    onclick="updateBetStatus(${index}, 'won')"
+                                    class="btn p-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200"
+                                >
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                    </svg>
+                                </button>
+                                <button
+                                    onclick="updateBetStatus(${index}, 'lost')"
+                                    class="btn p-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200"
+                                >
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function addBet() {
+            const match1 = {
+                description: document.getElementById('match1Description').value,
+                cote: parseFloat(document.getElementById('match1Cote').value)
+            };
+            const match2 = {
+                description: document.getElementById('match2Description').value,
+                cote: document.getElementById('match2Cote').value ? parseFloat(document.getElementById('match2Cote').value) : null
+            };
+
+            if (!match1.description || !match1.cote) {
+                alert('Veuillez remplir les informations du Match 1');
+                return;
+            }
+
+            if (!validateIndividualOdd(match1.cote) || (match2.cote && !validateIndividualOdd(match2.cote))) {
+                alert('Les cotes individuelles doivent être entre 1,27 et 1,8');
+                return;
+            }
+
+            if (!validateOdds(match1.cote, match2.cote)) {
+                alert('La cote totale doit être entre 1,6 et 1,85');
+                return;
+            }
+
+            const totalOdd = match2.cote ? (match1.cote * match2.cote).toFixed(2) : match1.cote.toFixed(2);
+            
+            bets.push({
+                match1,
+                match2,
+                totalOdd,
+                status: 'pending'
+            });
+
+            // Reset form
+            document.getElementById('match1Description').value = '';
+            document.getElementById('match1Cote').value = '';
+            document.getElementById('match2Description').value = '';
+            document.getElementById('match2Cote').value = '';
+
+            updateBetsList();
+            updateProjections();
+            
+            // Sauvegarde dans le localStorage
+            saveState();
+        }
+
+        function updateBetStatus(index, status) {
+            bets[index].status = status;
+            updateBetsList();
+            updateProjections();
+            saveState();
+        }
+
+        function saveState() {
+            localStorage.setItem('bettingTrackerState', JSON.stringify({
+                bets,
+                mise
+            }));
+        }
+
+        function loadState() {
+            const savedState = localStorage.getItem('bettingTrackerState');
+            if (savedState) {
+                const state = JSON.parse(savedState);
+                bets = state.bets;
+                mise = state.mise;
+                document.getElementById('miseInitiale').value = mise;
+                updateBetsList();
+                updateProjections();
+            }
+        }
+
+        // Event listener pour la mise initiale
+        document.getElementById('miseInitiale').addEventListener('change', (e) => {
+            mise = parseFloat(e.target.value);
+            updateProjections();
+            saveState();
+        });
+
+        // Chargement initial
+        loadState();
+        updateProjections();
+    </script>
+</body>
+</html>
