@@ -105,6 +105,22 @@
                 </div>
             </div>
         </div>
+        <!-- Test Firebase -->
+<div class="bg-white/80 backdrop-blur-lg rounded-xl p-6 shadow-lg">
+    <div class="flex justify-between items-center mb-4">
+        <h2 class="text-xl font-semibold text-gray-800">Test Firebase</h2>
+        <button onclick="testFirebaseConnection()" 
+                class="btn bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700">
+            Tester la connexion
+        </button>
+    </div>
+    <div class="space-y-2">
+        <div id="testStatus" class="text-sm px-3 py-1 rounded-full bg-white/20 text-gray-800">
+            En attente du test...
+        </div>
+        <pre id="testResult" class="bg-gray-100 p-4 rounded-lg text-sm overflow-auto"></pre>
+    </div>
+</div>
 
         <!-- Projections -->
         <div class="bg-white/80 backdrop-blur-lg rounded-xl p-6 shadow-lg">
