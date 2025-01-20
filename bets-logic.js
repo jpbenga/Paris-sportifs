@@ -1,9 +1,12 @@
 import { db, betsRef, firebaseFunctions, ref } from './firebase-init.js';
-import { generateId } from './utils.js';
 
 let bets = [];
 let mise = 10;
 let isSyncing = false;
+
+function generateId() {
+    return Date.now().toString(36) + Math.random().toString(36).substr(2);
+}
 
 // Fonction de validation des cotes individuelles
 function validateIndividualOdd(odd) {
