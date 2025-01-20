@@ -8,7 +8,6 @@ const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
 export const db = getDatabase(app);
 export const betsRef = ref(db, 'bets');
-app.automaticDataPersistence();
 
 // Export Firebase functions
 export const firebaseFunctions = { ref, onValue, set, get };
