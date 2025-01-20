@@ -4,46 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Challenge Paris Sportifs</title>
-    <!-- Dans le head -->
-<script type="module" src="js/firebase.js"></script>
-<script type="module" src="js/utils.js"></script>
-<script type="module" src="js/bets-logic.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Poppins', sans-serif; }
-        .gradient-bg { background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); }
-        .btn { transition: all 0.3s ease; }
-        .btn:active { transform: scale(0.98); }
-        .projection-card { transition: all 0.3s ease; }
-        .projection-card:hover { transform: translateY(-2px); }
-        .glass-effect {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-        }
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
-        }
-        .modal.active {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        .sync-spinner {
-            animation: spin 1s linear infinite;
-        }
-    </style>
+    <link rel="stylesheet" href="styles-css.css">
+    <link rel="stylesheet" href="modal-css.css">
+    
+    <!-- Firebase SDK -->
+    <script type="module" src="firebase-init.js"></script>
 </head>
 <body class="bg-gradient-to-br from-indigo-50 to-purple-50 min-h-screen pb-20">
     <!-- Modal Édition -->
@@ -159,14 +126,9 @@
         <div id="betsList" class="space-y-4"></div>
     </div>
 
-    <!-- Firebase SDK -->
-    <script type="module" src="js/firebase.js"></script>
-    <script type="module" src="js/utils.js"></script>
-    <script type="module" src="js/bets-logic.js"></script>
-
-    <!-- Initialisation -->
+    <!-- Scripts -->
     <script type="module">
-        import { initializeBets, syncData, addBet, updateBetStatus, deleteBet, testFirebaseConnection, openEditModal, closeEditModal, updateBet } from './js/bets-logic.js';
+        import { initializeBets, syncData, addBet, updateBetStatus, deleteBet, testFirebaseConnection, openEditModal, closeEditModal, updateBet } from './bets-logic.js';
         
         // Rendre les fonctions disponibles globalement
         window.syncData = syncData;
