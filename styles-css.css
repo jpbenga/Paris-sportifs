@@ -1,0 +1,37 @@
+body { 
+    font-family: 'Poppins', sans-serif; 
+}
+
+.gradient-bg { 
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); 
+}
+
+.btn { 
+    transition: all 0.3s ease; 
+}
+
+.btn:active { 
+    transform: scale(0.98); 
+}
+
+.projection-card { 
+    transition: all 0.3s ease; 
+}
+
+.projection-card:hover { 
+    transform: translateY(-2px); 
+}
+
+.glass-effect {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.sync-spinner {
+    animation: spin 1s linear infinite;
+}
