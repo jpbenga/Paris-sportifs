@@ -307,6 +307,8 @@ export async function initializeBets() {
     await syncData();
 }
 
+window.testFirebaseConnection = testFirebaseConnection;
+
 // Écouter les changements en temps réel
 firebaseFunctions.onValue(betsRef, (snapshot) => {
     const data = snapshot.val();
