@@ -307,7 +307,13 @@ export async function initializeBets() {
     await syncData();
 }
 
+// Expose les fonctions nécessaires globalement
 window.testFirebaseConnection = testFirebaseConnection;
+window.deleteBet = deleteBet;
+window.updateBetStatus = updateBetStatus;
+window.addBet = addBet;
+window.syncData = syncData;
+window.openEditModal = openEditModal;  // si cette fonction existe dans votre code
 
 // Écouter les changements en temps réel
 firebaseFunctions.onValue(betsRef, (snapshot) => {
