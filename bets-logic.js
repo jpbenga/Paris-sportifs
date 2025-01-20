@@ -156,6 +156,42 @@ export async function addBet() {
     await saveToServer();
 }
 
+// Fonction de test Firebase
+export async function testFirebaseConnection() {
+    const testRef = ref(db, 'test');
+    const statusElement = document.getElementById('testStatus');
+    const resultElement = document.getElementById('testResult');
+    
+    try {
+        statusElement.textContent = 'Test en cours...';
+        statusElement.className = 'text-sm px-3 py-1 rounded-full bg-yellow-500/20 text-yellow-100';
+        
+        // Test d'écriture
+        const testData = {
+            timestamp: Date.now(),
+            message: 'Test décriture'
+        };
+        
+        console.log('Tentative d\'écriture:', testData);
+        await firebaseFunctions.set(testRef, testData);
+        console.log('Écriture réussie');
+        
+        // Test de lecture
+        const snapshot = await firebaseFunctions.get(testRef);
+        const readData = snapshot.val();
+        console.log('Lecture réussie:', readData);
+        
+        statusElement.textContent = 'Test réussi!';
+        statusElement.className = 'text-sm px-3 py-1 rounded-full bg-green-500/20 text-green-100';
+        
+        resultElement.textContent = JSON.stringify(readData, null, 2);
+    } catch (error) {
+        console.error('Erreur de test:', error);
+        statusElement.textContent = 'Erreur: ' + error.message;
+        statusElement.className = 'text-sm px-3 py-1 rounded-full bg-red-500/20 text-red-100';
+    }
+}
+
 // Mise à jour des statistiques
 function updateStats() {
     const wonBets = bets.filter(b => b.status === 'won').length;
