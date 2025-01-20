@@ -11,3 +11,4 @@ export const betsRef = ref(db, 'bets');
 
 // Export Firebase functions
 export const firebaseFunctions = { ref, onValue, set, get };
+export { ref };
