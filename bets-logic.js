@@ -193,6 +193,7 @@ async function saveCurrentSession() {
     }
 }
 
+// Fonction complète pour l'affichage des sessions
 function updateSessionsDisplay() {
     const container = document.getElementById('sessions-container');
     if (!container) return;
@@ -201,6 +202,7 @@ function updateSessionsDisplay() {
     
     // Affichage de la session courante
     if (currentSession) {
+        const progression = Math.round((currentSession.currentAmount / currentSession.initialAmount - 1) * 100);
         html += `
             <div class="bg-white/90 rounded-xl p-6 shadow-lg border border-indigo-100">
                 <div class="flex justify-between items-center mb-4">
@@ -220,7 +222,7 @@ function updateSessionsDisplay() {
                         </button>
                     </div>
                 </div>
-                <div class="grid grid-cols-3 gap-4">
+                <div class="grid grid-cols-4 gap-4">
                     <div class="bg-white/50 p-4 rounded-lg">
                         <div class="text-sm text-gray-600">Mise initiale</div>
                         <div class="text-lg font-semibold">${currentSession.initialAmount}€</div>
@@ -230,6 +232,12 @@ function updateSessionsDisplay() {
                         <div class="text-lg font-semibold">${currentSession.currentAmount}€</div>
                     </div>
                     <div class="bg-white/50 p-4 rounded-lg">
+                        <div class="text-sm text-gray-600">Progression</div>
+                        <div class="text-lg font-semibold ${progression >= 0 ? 'text-green-600' : 'text-red-600'}">
+                            ${progression > 0 ? '+' : ''}${progression}%
+                        </div>
+                    </div>
+                    <div class="bg-white/50 p-4 rounded-lg">
                         <div class="text-sm text-gray-600">Étape</div>
                         <div class="text-lg font-semibold">${currentSession.maxStep}/10</div>
                     </div>
@@ -237,9 +245,10 @@ function updateSessionsDisplay() {
             </div>`;
     }
 
+    // En-tête de la section des sessions
     html += `
         <div class="flex justify-between items-center">
-            <h3 class="text-xl font-semibold text-gray-800">Sessions</h3>
+            <h3 class="text-xl font-semibold text-gray-800">Historique des sessions</h3>
             ${!currentSession ? `
                 <button onclick="window.startNewSession()" 
                         class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
@@ -248,6 +257,71 @@ function updateSessionsDisplay() {
             ` : ''}
         </div>`;
 
+    // Liste des sessions terminées
+    if (sessions.length === 0) {
+        html += '<p class="text-center text-gray-600 py-4">Aucune session terminée</p>';
+    } else {
+        sessions.sort((a, b) => b.startDate.localeCompare(a.startDate)); // Tri par date décroissante
+        
+        sessions.forEach(session => {
+            const progression = Math.round((session.currentAmount / session.initialAmount - 1) * 100);
+            const duration = Math.round((new Date(session.endDate) - new Date(session.startDate)) / (1000 * 60)); // en minutes
+            
+            const statusColors = {
+                [SESSION_STATUS.SUCCESS]: 'bg-green-100 text-green-800',
+                [SESSION_STATUS.FAILED]: 'bg-red-100 text-red-800',
+                [SESSION_STATUS.ABANDONED]: 'bg-gray-100 text-gray-800'
+            };
+
+            const statusLabels = {
+                [SESSION_STATUS.SUCCESS]: 'Réussie',
+                [SESSION_STATUS.FAILED]: 'Échouée',
+                [SESSION_STATUS.ABANDONED]: 'Abandonnée'
+            };
+
+            html += `
+                <div class="bg-white/90 rounded-xl p-6 shadow-lg border border-indigo-100 mt-4">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-1 rounded-full text-sm ${statusColors[session.status]}">
+                                    ${statusLabels[session.status]}
+                                </span>
+                                <span class="text-sm text-gray-500">
+                                    ${duration} min
+                                </span>
+                            </div>
+                            <p class="text-sm text-gray-600 mt-2">
+                                Du ${new Date(session.startDate).toLocaleString('fr-FR')} 
+                                au ${new Date(session.endDate).toLocaleString('fr-FR')}
+                            </p>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm text-gray-600">Étape atteinte</div>
+                            <div class="text-xl font-bold">${session.maxStep}/10</div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <div class="text-sm text-gray-600">Mise initiale</div>
+                            <div class="font-semibold">${session.initialAmount}€</div>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <div class="text-sm text-gray-600">Montant final</div>
+                            <div class="font-semibold">${session.currentAmount}€</div>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <div class="text-sm text-gray-600">Progression</div>
+                            <div class="font-semibold ${progression >= 0 ? 'text-green-600' : 'text-red-600'}">
+                                ${progression > 0 ? '+' : ''}${progression}%
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+        });
+    }
+
+    html += '</div>';
     container.innerHTML = html;
 }
 
