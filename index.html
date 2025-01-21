@@ -134,42 +134,19 @@
     <!-- Scripts -->
     <!-- Dans votre index.html, modifiez les balises script -->
 <script type="module">
-    import { initializeBets, syncData, addBet, updateBetStatus, deleteBet, testFirebaseConnection, openEditModal, closeEditModal, updateBet } from './bets-logic.js';
-    import { loadSessions, updateSessionProgress, startNewSession, endCurrentSession } from './sessions-logic.js';
-    
-    // Rendre les fonctions disponibles globalement
-    window.syncData = syncData;
-    window.addBet = addBet;
-    window.updateBetStatus = updateBetStatus;
-    window.deleteBet = deleteBet;
-    window.testFirebaseConnection = testFirebaseConnection;
-    window.openEditModal = openEditModal;
-    window.closeEditModal = closeEditModal;
-    window.updateBet = updateBet;
-    window.startNewSession = startNewSession;
-    window.endCurrentSession = endCurrentSession;
-    window.updateSessionProgress = updateSessionProgress;
+    import { initializeBets } from './bets-logic.js';
 
-    // Event listener pour la mise initiale
-    document.getElementById('miseInitiale').addEventListener('change', async (e) => {
+    document.getElementById('miseInitiale').addEventListener('change', (e) => {
         window.mise = parseFloat(e.target.value);
-        await updateProjections();
-        await saveToServer();
+        window.updateProjections();
+        window.saveToServer();
     });
 
     // Initialisation
-    await Promise.all([
-        initializeBets(),
-        loadSessions()
-    ]);
+    initializeBets();
 
     // Synchronisation périodique
-    setInterval(async () => {
-        await Promise.all([
-            syncData(),
-            loadSessions()
-        ]);
-    }, 30000);
+    setInterval(window.syncData, 30000);
 </script>
 </body>
 </html>
