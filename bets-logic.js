@@ -294,6 +294,92 @@ function updateStats() {
     if (statsLost) statsLost.textContent = lostBets;
 }
 
+// Ajouter après la fonction updateStats et avant updateSessionsDisplay
+function updateBetsList() {
+    const betsListDiv = document.getElementById('betsList');
+    if (!betsListDiv) return;
+
+    betsListDiv.innerHTML = bets.map((bet, index) => `
+        <div class="glass-effect rounded-xl p-6 shadow-lg border border-indigo-100 mb-4">
+            <div class="flex justify-between items-start">
+                <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-2">
+                        <h3 class="text-lg font-semibold text-gray-800">Pari #${index + 1}</h3>
+                        <div class="flex gap-2">
+                            ${bet.status === STATUS.PENDING ? `
+                                <button onclick="window.updateBetStatus('${bet.id}', '${STATUS.WON}')" 
+                                        class="text-sm px-3 py-1 bg-green-100 text-green-700 rounded-full hover:bg-green-200">
+                                    Gagné
+                                </button>
+                                <button onclick="window.updateBetStatus('${bet.id}', '${STATUS.LOST}')"
+                                        class="text-sm px-3 py-1 bg-red-100 text-red-700 rounded-full hover:bg-red-200">
+                                    Perdu
+                                </button>
+                            ` : bet.status === STATUS.WON ?
+                                '<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">Gagné</span>' :
+                                '<span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm">Perdu</span>'
+                            }
+                        </div>
+                    </div>
+                    <div class="space-y-1">
+                        <p class="text-sm text-gray-600">
+                            <span class="font-medium">Match 1:</span> 
+                            ${bet.match1.description} 
+                            <span class="text-indigo-600 font-medium">(${bet.match1.cote})</span>
+                        </p>
+                        ${bet.match2.description ? `
+                            <p class="text-sm text-gray-600">
+                                <span class="font-medium">Match 2:</span> 
+                                ${bet.match2.description} 
+                                <span class="text-indigo-600 font-medium">(${bet.match2.cote})</span>
+                            </p>
+                        ` : ''}
+                        <p class="text-sm font-medium text-gray-800">
+                            Cote totale: <span class="text-indigo-600">${bet.totalOdd}</span>
+                        </p>
+                        ${bet.status === STATUS.WON ? `
+                            <p class="text-sm font-medium text-green-600">
+                                Gain: ${(currentSession.initialAmount * bet.totalOdd).toFixed(2)}€
+                            </p>
+                        ` : ''}
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    ${bet.status === STATUS.PENDING ? `
+                        <button onclick="window.deleteBet('${bet.id}')"
+                                class="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
+                            🗑️
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Ajouter également la fonction updateProjections
+function updateProjections() {
+    const projectionsDiv = document.getElementById('projections');
+    if (!projectionsDiv) return;
+
+    const wonBets = bets.filter(b => b.status === STATUS.WON).length;
+    const projections = calculateProjections();
+
+    projectionsDiv.innerHTML = projections.map((proj, i) => `
+        <div class="projection-card p-3 rounded-xl text-center shadow-sm ${
+            i < wonBets
+                ? 'bg-gradient-to-br from-emerald-400 to-green-500 text-white'
+                : i === wonBets
+                ? 'bg-gradient-to-br from-violet-500 to-purple-600 text-white ring-2 ring-purple-200'
+                : 'bg-white/80 text-gray-800'
+        }">
+            <div class="text-xs font-medium">Étape</div>
+            <div class="text-xl font-bold mb-1">#${i + 1}</div>
+            <div class="font-semibold">${proj}€</div>
+        </div>
+    `).join('');
+}
+
 // Remplacer "[RESTE DE LA FONCTION updateSessionsDisplay ICI]" par ce qui suit
 // Fonction d'affichage des sessions
 function updateSessionsDisplay() {
