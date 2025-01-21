@@ -64,6 +64,7 @@ function setSyncStatus(status, isError = false) {
 }
 
 // Gestion des sessions
+// Dans bets-logic.js, modifier la fonction startNewSession
 async function startNewSession() {
     if (currentSession) {
         if (!confirm('Une session est déjà en cours. Voulez-vous vraiment en démarrer une nouvelle ?')) {
@@ -72,18 +73,77 @@ async function startNewSession() {
         await endCurrentSession(SESSION_STATUS.ABANDONED);
     }
 
+    const initialAmount = parseFloat(prompt("Entrez le montant initial de votre session :", "10"));
+    if (!initialAmount || isNaN(initialAmount) || initialAmount <= 0) {
+        alert("Veuillez entrer un montant initial valide");
+        return;
+    }
+
     currentSession = {
         id: generateId(),
         startDate: new Date().toISOString(),
         status: SESSION_STATUS.IN_PROGRESS,
         bets: [],
-        initialAmount: mise,
-        currentAmount: mise,
+        initialAmount: initialAmount,
+        currentAmount: initialAmount,
         maxStep: 0
     };
 
+    // Mettre à jour l'affichage
+    const miseInput = document.getElementById('miseInitiale');
+    if (miseInput) miseInput.value = initialAmount;
+    mise = initialAmount;
+
     await saveCurrentSession();
     updateSessionsDisplay();
+}
+
+// Modifier la fonction calculateProjections pour utiliser le montant initial de la session
+function calculateProjections() {
+    const startAmount = currentSession ? currentSession.initialAmount : mise;
+    let projection = startAmount;
+    return Array.from({ length: 10 }, (_, i) => {
+        projection *= 1.7;
+        return Math.round(projection * 100) / 100;
+    });
+}
+
+// Modifier la fonction updateBetStatus pour le calcul des gains
+async function updateBetStatus(betId, status) {
+    const betIndex = bets.findIndex(b => b.id === betId);
+    if (betIndex !== -1) {
+        bets[betIndex].status = status;
+        
+        if (currentSession) {
+            const wonBets = bets.filter(b => b.status === STATUS.WON);
+            currentSession.maxStep = wonBets.length;
+            
+            // Calculer le montant actuel basé sur le montant initial
+            let amount = currentSession.initialAmount;
+            for (const bet of wonBets) {
+                amount *= parseFloat(bet.totalOdd);
+            }
+            currentSession.currentAmount = Math.round(amount * 100) / 100;
+            currentSession.bets = [...bets];
+
+            if (status === STATUS.LOST) {
+                await endCurrentSession(SESSION_STATUS.FAILED);
+                return;
+            }
+
+            if (currentSession.maxStep === 10) {
+                await endCurrentSession(SESSION_STATUS.SUCCESS);
+                return;
+            }
+
+            await saveCurrentSession();
+        }
+
+        updateBetsList();
+        updateProjections();
+        updateStats();
+        await saveToServer();
+    }
 }
 
 async function endCurrentSession(status) {
