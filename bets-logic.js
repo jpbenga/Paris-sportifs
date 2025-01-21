@@ -6,6 +6,7 @@ let bets = [];
 let mise = 10;
 let isSyncing = false;
 let currentSession = null;
+let sessions = [];
 const sessionsRef = ref(db, 'sessions');
 
 // Constantes pour les statuts
@@ -39,14 +40,14 @@ function validateOdds(match1, match2) {
 }
 
 function calculateProjections() {
-    let projection = mise;
+    const startAmount = currentSession ? currentSession.initialAmount : mise;
+    let projection = startAmount;
     return Array.from({ length: 10 }, (_, i) => {
         projection *= 1.7;
         return Math.round(projection * 100) / 100;
     });
 }
 
-// Gestion du statut de synchronisation
 function setSyncStatus(status, isError = false) {
     const statusElement = document.getElementById('syncStatus');
     const syncButton = document.getElementById('syncButton');
@@ -63,8 +64,7 @@ function setSyncStatus(status, isError = false) {
     syncButton.classList.toggle('sync-spinner', status === 'Synchronisation...');
 }
 
-// Gestion des sessions
-// Dans bets-logic.js, modifier la fonction startNewSession
+// Gestion des Sessions
 async function startNewSession() {
     if (currentSession) {
         if (!confirm('Une session est déjà en cours. Voulez-vous vraiment en démarrer une nouvelle ?')) {
@@ -90,60 +90,13 @@ async function startNewSession() {
     };
 
     // Mettre à jour l'affichage
+    mise = initialAmount;
     const miseInput = document.getElementById('miseInitiale');
     if (miseInput) miseInput.value = initialAmount;
-    mise = initialAmount;
 
     await saveCurrentSession();
     updateSessionsDisplay();
-}
-
-// Modifier la fonction calculateProjections pour utiliser le montant initial de la session
-function calculateProjections() {
-    const startAmount = currentSession ? currentSession.initialAmount : mise;
-    let projection = startAmount;
-    return Array.from({ length: 10 }, (_, i) => {
-        projection *= 1.7;
-        return Math.round(projection * 100) / 100;
-    });
-}
-
-// Modifier la fonction updateBetStatus pour le calcul des gains
-async function updateBetStatus(betId, status) {
-    const betIndex = bets.findIndex(b => b.id === betId);
-    if (betIndex !== -1) {
-        bets[betIndex].status = status;
-        
-        if (currentSession) {
-            const wonBets = bets.filter(b => b.status === STATUS.WON);
-            currentSession.maxStep = wonBets.length;
-            
-            // Calculer le montant actuel basé sur le montant initial
-            let amount = currentSession.initialAmount;
-            for (const bet of wonBets) {
-                amount *= parseFloat(bet.totalOdd);
-            }
-            currentSession.currentAmount = Math.round(amount * 100) / 100;
-            currentSession.bets = [...bets];
-
-            if (status === STATUS.LOST) {
-                await endCurrentSession(SESSION_STATUS.FAILED);
-                return;
-            }
-
-            if (currentSession.maxStep === 10) {
-                await endCurrentSession(SESSION_STATUS.SUCCESS);
-                return;
-            }
-
-            await saveCurrentSession();
-        }
-
-        updateBetsList();
-        updateProjections();
-        updateStats();
-        await saveToServer();
-    }
+    updateProjections();
 }
 
 async function endCurrentSession(status) {
@@ -153,14 +106,16 @@ async function endCurrentSession(status) {
     currentSession.status = status;
     currentSession.bets = [...bets];
 
-    const sessions = await loadSessions();
     sessions.push({...currentSession});
-    await saveSessions(sessions);
-
+    await saveSessions();
+    
     currentSession = null;
     bets = [];
-    await saveToServer();
-    await saveCurrentSession();
+    await Promise.all([
+        saveToServer(),
+        saveCurrentSession()
+    ]);
+
     updateSessionsDisplay();
     updateBetsList();
     updateProjections();
@@ -169,15 +124,32 @@ async function endCurrentSession(status) {
 
 async function loadSessions() {
     try {
-        const snapshot = await firebaseFunctions.get(sessionsRef);
-        return snapshot.val() || [];
+        const [sessionsSnapshot, currentSessionSnapshot] = await Promise.all([
+            firebaseFunctions.get(sessionsRef),
+            firebaseFunctions.get(ref(db, 'currentSession'))
+        ]);
+
+        if (sessionsSnapshot.exists()) {
+            sessions = sessionsSnapshot.val() || [];
+        }
+
+        if (currentSessionSnapshot.exists()) {
+            currentSession = currentSessionSnapshot.val();
+            if (currentSession) {
+                mise = currentSession.initialAmount;
+                const miseInput = document.getElementById('miseInitiale');
+                if (miseInput) miseInput.value = mise;
+            }
+        }
+
+        updateSessionsDisplay();
+        updateProjections();
     } catch (error) {
         console.error('Erreur lors du chargement des sessions:', error);
-        return [];
     }
 }
 
-async function saveSessions(sessions) {
+async function saveSessions() {
     try {
         await firebaseFunctions.set(sessionsRef, sessions);
     } catch (error) {
@@ -193,139 +165,7 @@ async function saveCurrentSession() {
     }
 }
 
-// Fonction complète pour l'affichage des sessions
-function updateSessionsDisplay() {
-    const container = document.getElementById('sessions-container');
-    if (!container) return;
-
-    let html = '<div class="space-y-4">';
-    
-    // Affichage de la session courante
-    if (currentSession) {
-        const progression = Math.round((currentSession.currentAmount / currentSession.initialAmount - 1) * 100);
-        html += `
-            <div class="bg-white/90 rounded-xl p-6 shadow-lg border border-indigo-100">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-xl font-semibold text-gray-800">Session en cours</h3>
-                    <div class="flex gap-2">
-                        <button onclick="window.endSession('${SESSION_STATUS.SUCCESS}')" 
-                                class="px-3 py-1 bg-green-100 text-green-700 rounded-full hover:bg-green-200">
-                            Réussie
-                        </button>
-                        <button onclick="window.endSession('${SESSION_STATUS.FAILED}')"
-                                class="px-3 py-1 bg-red-100 text-red-700 rounded-full hover:bg-red-200">
-                            Échouée
-                        </button>
-                        <button onclick="window.endSession('${SESSION_STATUS.ABANDONED}')"
-                                class="px-3 py-1 bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200">
-                            Abandonner
-                        </button>
-                    </div>
-                </div>
-                <div class="grid grid-cols-4 gap-4">
-                    <div class="bg-white/50 p-4 rounded-lg">
-                        <div class="text-sm text-gray-600">Mise initiale</div>
-                        <div class="text-lg font-semibold">${currentSession.initialAmount}€</div>
-                    </div>
-                    <div class="bg-white/50 p-4 rounded-lg">
-                        <div class="text-sm text-gray-600">Montant actuel</div>
-                        <div class="text-lg font-semibold">${currentSession.currentAmount}€</div>
-                    </div>
-                    <div class="bg-white/50 p-4 rounded-lg">
-                        <div class="text-sm text-gray-600">Progression</div>
-                        <div class="text-lg font-semibold ${progression >= 0 ? 'text-green-600' : 'text-red-600'}">
-                            ${progression > 0 ? '+' : ''}${progression}%
-                        </div>
-                    </div>
-                    <div class="bg-white/50 p-4 rounded-lg">
-                        <div class="text-sm text-gray-600">Étape</div>
-                        <div class="text-lg font-semibold">${currentSession.maxStep}/10</div>
-                    </div>
-                </div>
-            </div>`;
-    }
-
-    // En-tête de la section des sessions
-    html += `
-        <div class="flex justify-between items-center">
-            <h3 class="text-xl font-semibold text-gray-800">Historique des sessions</h3>
-            ${!currentSession ? `
-                <button onclick="window.startNewSession()" 
-                        class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
-                    Nouvelle Session
-                </button>
-            ` : ''}
-        </div>`;
-
-    // Liste des sessions terminées
-    if (sessions.length === 0) {
-        html += '<p class="text-center text-gray-600 py-4">Aucune session terminée</p>';
-    } else {
-        sessions.sort((a, b) => b.startDate.localeCompare(a.startDate)); // Tri par date décroissante
-        
-        sessions.forEach(session => {
-            const progression = Math.round((session.currentAmount / session.initialAmount - 1) * 100);
-            const duration = Math.round((new Date(session.endDate) - new Date(session.startDate)) / (1000 * 60)); // en minutes
-            
-            const statusColors = {
-                [SESSION_STATUS.SUCCESS]: 'bg-green-100 text-green-800',
-                [SESSION_STATUS.FAILED]: 'bg-red-100 text-red-800',
-                [SESSION_STATUS.ABANDONED]: 'bg-gray-100 text-gray-800'
-            };
-
-            const statusLabels = {
-                [SESSION_STATUS.SUCCESS]: 'Réussie',
-                [SESSION_STATUS.FAILED]: 'Échouée',
-                [SESSION_STATUS.ABANDONED]: 'Abandonnée'
-            };
-
-            html += `
-                <div class="bg-white/90 rounded-xl p-6 shadow-lg border border-indigo-100 mt-4">
-                    <div class="flex justify-between items-start mb-4">
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <span class="px-2 py-1 rounded-full text-sm ${statusColors[session.status]}">
-                                    ${statusLabels[session.status]}
-                                </span>
-                                <span class="text-sm text-gray-500">
-                                    ${duration} min
-                                </span>
-                            </div>
-                            <p class="text-sm text-gray-600 mt-2">
-                                Du ${new Date(session.startDate).toLocaleString('fr-FR')} 
-                                au ${new Date(session.endDate).toLocaleString('fr-FR')}
-                            </p>
-                        </div>
-                        <div class="text-right">
-                            <div class="text-sm text-gray-600">Étape atteinte</div>
-                            <div class="text-xl font-bold">${session.maxStep}/10</div>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-3 gap-4">
-                        <div class="bg-gray-50 p-3 rounded-lg">
-                            <div class="text-sm text-gray-600">Mise initiale</div>
-                            <div class="font-semibold">${session.initialAmount}€</div>
-                        </div>
-                        <div class="bg-gray-50 p-3 rounded-lg">
-                            <div class="text-sm text-gray-600">Montant final</div>
-                            <div class="font-semibold">${session.currentAmount}€</div>
-                        </div>
-                        <div class="bg-gray-50 p-3 rounded-lg">
-                            <div class="text-sm text-gray-600">Progression</div>
-                            <div class="font-semibold ${progression >= 0 ? 'text-green-600' : 'text-red-600'}">
-                                ${progression > 0 ? '+' : ''}${progression}%
-                            </div>
-                        </div>
-                    </div>
-                </div>`;
-        });
-    }
-
-    html += '</div>';
-    container.innerHTML = html;
-}
-
-// Gestion des paris
+// Gestion des Paris
 async function addBet() {
     if (!currentSession) {
         alert('Veuillez démarrer une nouvelle session avant d\'ajouter un pari.');
@@ -388,61 +228,6 @@ async function addBet() {
     ]);
 }
 
-function updateBetsList() {
-    const betsListDiv = document.getElementById('betsList');
-    if (!betsListDiv) return;
-
-    betsListDiv.innerHTML = bets.map((bet, index) => `
-        <div class="glass-effect rounded-xl p-6 shadow-lg border border-indigo-100 mb-4">
-            <div class="flex justify-between items-start">
-                <div class="flex-1">
-                    <div class="flex items-center gap-2 mb-2">
-                        <h3 class="text-lg font-semibold text-gray-800">Pari #${index + 1}</h3>
-                        <div class="flex gap-2">
-                            ${bet.status === STATUS.PENDING ? `
-                                <button onclick="window.updateBetStatus('${bet.id}', '${STATUS.WON}')" 
-                                        class="text-sm px-3 py-1 bg-green-100 text-green-700 rounded-full hover:bg-green-200">
-                                    Gagné
-                                </button>
-                                <button onclick="window.updateBetStatus('${bet.id}', '${STATUS.LOST}')"
-                                        class="text-sm px-3 py-1 bg-red-100 text-red-700 rounded-full hover:bg-red-200">
-                                    Perdu
-                                </button>
-                            ` : bet.status === STATUS.WON ?
-                                '<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">Gagné</span>' :
-                                '<span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm">Perdu</span>'
-                            }
-                        </div>
-                    </div>
-                    <div class="space-y-1">
-                        <p class="text-sm text-gray-600">
-                            <span class="font-medium">Match 1:</span> 
-                            ${bet.match1.description} 
-                            <span class="text-indigo-600 font-medium">(${bet.match1.cote})</span>
-                        </p>
-                        ${bet.match2.description ? `
-                            <p class="text-sm text-gray-600">
-                                <span class="font-medium">Match 2:</span> 
-                                ${bet.match2.description} 
-                                <span class="text-indigo-600 font-medium">(${bet.match2.cote})</span>
-                            </p>
-                        ` : ''}
-                        <p class="text-sm font-medium text-gray-800">
-                            Cote totale: <span class="text-indigo-600">${bet.totalOdd}</span>
-                        </p>
-                    </div>
-                </div>
-                <div class="flex gap-2">
-                    <button onclick="window.deleteBet('${bet.id}')"
-                            class="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
-                        🗑️
-                    </button>
-                </div>
-            </div>
-        </div>
-    `).join('');
-}
-
 async function updateBetStatus(betId, status) {
     const betIndex = bets.findIndex(b => b.id === betId);
     if (betIndex !== -1) {
@@ -451,9 +236,13 @@ async function updateBetStatus(betId, status) {
         if (currentSession) {
             const wonBets = bets.filter(b => b.status === STATUS.WON);
             currentSession.maxStep = wonBets.length;
-            currentSession.currentAmount = wonBets.reduce((acc, bet) => 
-                acc * parseFloat(bet.totalOdd), currentSession.initialAmount
-            );
+            
+            // Calculer le montant actuel basé sur le montant initial
+            let amount = currentSession.initialAmount;
+            for (const bet of wonBets) {
+                amount *= parseFloat(bet.totalOdd);
+            }
+            currentSession.currentAmount = Math.round(amount * 100) / 100;
             currentSession.bets = [...bets];
 
             if (status === STATUS.LOST) {
@@ -493,7 +282,7 @@ async function deleteBet(betId) {
     await saveToServer();
 }
 
-// Mise à jour des statistiques
+// Fonctions de mise à jour de l'interface
 function updateStats() {
     const wonBets = bets.filter(b => b.status === STATUS.WON).length;
     const lostBets = bets.filter(b => b.status === STATUS.LOST).length;
@@ -505,7 +294,6 @@ function updateStats() {
     if (statsLost) statsLost.textContent = lostBets;
 }
 
-// Mise à jour des projections
 function updateProjections() {
     const projectionsDiv = document.getElementById('projections');
     if (!projectionsDiv) return;
@@ -528,6 +316,8 @@ function updateProjections() {
     `).join('');
 }
 
+[RESTE DE LA FONCTION updateSessionsDisplay ICI]
+
 // Synchronisation et sauvegarde
 async function syncData() {
     if (isSyncing) return;
@@ -535,9 +325,10 @@ async function syncData() {
     setSyncStatus('Synchronisation...');
     
     try {
-        const [betsSnapshot, currentSessionSnapshot] = await Promise.all([
+        const [betsSnapshot, currentSessionSnapshot, sessionsSnapshot] = await Promise.all([
             firebaseFunctions.get(betsRef),
-            firebaseFunctions.get(ref(db, 'currentSession'))
+            firebaseFunctions.get(ref(db, 'currentSession')),
+            firebaseFunctions.get(sessionsRef)
         ]);
 
         const betsData = betsSnapshot.val();
@@ -548,7 +339,13 @@ async function syncData() {
             if (miseInput) miseInput.value = mise;
         }
 
-        currentSession = currentSessionSnapshot.val();
+        if (currentSessionSnapshot.exists()) {
+            currentSession = currentSessionSnapshot.val();
+        }
+
+        if (sessionsSnapshot.exists()) {
+            sessions = sessionsSnapshot.val() || [];
+        }
         
         updateBetsList();
         updateProjections();
@@ -579,7 +376,10 @@ async function saveToServer() {
 
 // Initialisation
 async function initializeBets() {
-    await syncData();
+    await Promise.all([
+        syncData(),
+        loadSessions()
+    ]);
 }
 
 // Exposition des fonctions globales
