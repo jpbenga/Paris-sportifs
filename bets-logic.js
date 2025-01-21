@@ -1,14 +1,6 @@
 // bets-logic.js
 import { db, betsRef, firebaseFunctions, ref } from './firebase-init.js';
 
-// État global
-let bets = [];
-let mise = 10;
-let isSyncing = false;
-let currentSession = null;
-let sessions = [];
-const sessionsRef = ref(db, 'sessions');
-
 // Constantes pour les statuts
 const STATUS = {
     PENDING: 'pending',
@@ -63,6 +55,239 @@ function setSyncStatus(status, isError = false) {
     
     syncButton.classList.toggle('sync-spinner', status === 'Synchronisation...');
 }
+
+// Fonctions de mise à jour de l'interface
+function updateStats() {
+    const wonBets = bets.filter(b => b.status === STATUS.WON).length;
+    const lostBets = bets.filter(b => b.status === STATUS.LOST).length;
+    
+    const statsWon = document.getElementById('statsWon');
+    const statsLost = document.getElementById('statsLost');
+    
+    if (statsWon) statsWon.textContent = wonBets;
+    if (statsLost) statsLost.textContent = lostBets;
+}
+
+function updateBetsList() {
+    const betsListDiv = document.getElementById('betsList');
+    if (!betsListDiv) return;
+
+    betsListDiv.innerHTML = bets.map((bet, index) => `
+        <div class="glass-effect rounded-xl p-6 shadow-lg border border-indigo-100 mb-4">
+            <div class="flex justify-between items-start">
+                <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-2">
+                        <h3 class="text-lg font-semibold text-gray-800">Pari #${index + 1}</h3>
+                        <div class="flex gap-2">
+                            ${bet.status === STATUS.PENDING ? `
+                                <button onclick="window.updateBetStatus('${bet.id}', '${STATUS.WON}')" 
+                                        class="text-sm px-3 py-1 bg-green-100 text-green-700 rounded-full hover:bg-green-200">
+                                    Gagné
+                                </button>
+                                <button onclick="window.updateBetStatus('${bet.id}', '${STATUS.LOST}')"
+                                        class="text-sm px-3 py-1 bg-red-100 text-red-700 rounded-full hover:bg-red-200">
+                                    Perdu
+                                </button>
+                            ` : bet.status === STATUS.WON ?
+                                '<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">Gagné</span>' :
+                                '<span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm">Perdu</span>'
+                            }
+                        </div>
+                    </div>
+                    <div class="space-y-1">
+                        <p class="text-sm text-gray-600">
+                            <span class="font-medium">Match 1:</span> 
+                            ${bet.match1.description} 
+                            <span class="text-indigo-600 font-medium">(${bet.match1.cote})</span>
+                        </p>
+                        ${bet.match2.description ? `
+                            <p class="text-sm text-gray-600">
+                                <span class="font-medium">Match 2:</span> 
+                                ${bet.match2.description} 
+                                <span class="text-indigo-600 font-medium">(${bet.match2.cote})</span>
+                            </p>
+                        ` : ''}
+                        <p class="text-sm font-medium text-gray-800">
+                            Cote totale: <span class="text-indigo-600">${bet.totalOdd}</span>
+                        </p>
+                        ${bet.status === STATUS.WON ? `
+                            <p class="text-sm font-medium text-green-600">
+                                Gain: ${(currentSession.initialAmount * bet.totalOdd).toFixed(2)}€
+                            </p>
+                        ` : ''}
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    ${bet.status === STATUS.PENDING ? `
+                        <button onclick="window.deleteBet('${bet.id}')"
+                                class="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
+                            🗑️
+                        </button>
+                    ` : ''}
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function updateProjections() {
+    const projectionsDiv = document.getElementById('projections');
+    if (!projectionsDiv) return;
+
+    const wonBets = bets.filter(b => b.status === STATUS.WON).length;
+    const projections = calculateProjections();
+
+    projectionsDiv.innerHTML = projections.map((proj, i) => `
+        <div class="projection-card p-3 rounded-xl text-center shadow-sm ${
+            i < wonBets
+                ? 'bg-gradient-to-br from-emerald-400 to-green-500 text-white'
+                : i === wonBets
+                ? 'bg-gradient-to-br from-violet-500 to-purple-600 text-white ring-2 ring-purple-200'
+                : 'bg-white/80 text-gray-800'
+        }">
+            <div class="text-xs font-medium">Étape</div>
+            <div class="text-xl font-bold mb-1">#${i + 1}</div>
+            <div class="font-semibold">${proj}€</div>
+        </div>
+    `).join('');
+}
+
+function updateSessionsDisplay() {
+    const container = document.getElementById('sessions-container');
+    if (!container) return;
+
+    let html = '<div class="space-y-4">';
+    
+    // Affichage de la session courante
+    if (currentSession) {
+        const progression = Math.round((currentSession.currentAmount / currentSession.initialAmount - 1) * 100);
+        html += `
+            <div class="bg-white/90 rounded-xl p-6 shadow-lg border border-indigo-100">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-semibold text-gray-800">Session en cours</h3>
+                    <div class="flex gap-2">
+                        <button onclick="window.endSession('${SESSION_STATUS.SUCCESS}')" 
+                                class="px-3 py-1 bg-green-100 text-green-700 rounded-full hover:bg-green-200">
+                            Réussie
+                        </button>
+                        <button onclick="window.endSession('${SESSION_STATUS.FAILED}')"
+                                class="px-3 py-1 bg-red-100 text-red-700 rounded-full hover:bg-red-200">
+                            Échouée
+                        </button>
+                        <button onclick="window.endSession('${SESSION_STATUS.ABANDONED}')"
+                                class="px-3 py-1 bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200">
+                            Abandonner
+                        </button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-4 gap-4">
+                    <div class="bg-white/50 p-4 rounded-lg">
+                        <div class="text-sm text-gray-600">Mise initiale</div>
+                        <div class="text-lg font-semibold">${currentSession.initialAmount}€</div>
+                    </div>
+                    <div class="bg-white/50 p-4 rounded-lg">
+                        <div class="text-sm text-gray-600">Montant actuel</div>
+                        <div class="text-lg font-semibold">${currentSession.currentAmount}€</div>
+                    </div>
+                    <div class="bg-white/50 p-4 rounded-lg">
+                        <div class="text-sm text-gray-600">Progression</div>
+                        <div class="text-lg font-semibold ${progression >= 0 ? 'text-green-600' : 'text-red-600'}">
+                            ${progression > 0 ? '+' : ''}${progression}%
+                        </div>
+                    </div>
+                    <div class="bg-white/50 p-4 rounded-lg">
+                        <div class="text-sm text-gray-600">Étape</div>
+                        <div class="text-lg font-semibold">${currentSession.maxStep}/10</div>
+                    </div>
+                </div>
+            </div>`;
+    }
+
+    html += `
+        <div class="flex justify-between items-center">
+            <h3 class="text-xl font-semibold text-gray-800">Historique des sessions</h3>
+            ${!currentSession ? `
+                <button onclick="window.startNewSession()" 
+                        class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
+                    Nouvelle Session
+                </button>
+            ` : ''}
+        </div>`;
+
+    if (sessions.length === 0) {
+        html += '<p class="text-center text-gray-600 py-4">Aucune session terminée</p>';
+    } else {
+        sessions.sort((a, b) => b.startDate.localeCompare(a.startDate));
+        
+        sessions.forEach(session => {
+            const progression = Math.round((session.currentAmount / session.initialAmount - 1) * 100);
+            const duration = Math.round((new Date(session.endDate) - new Date(session.startDate)) / (1000 * 60));
+            
+            const statusColors = {
+                [SESSION_STATUS.SUCCESS]: 'bg-green-100 text-green-800',
+                [SESSION_STATUS.FAILED]: 'bg-red-100 text-red-800',
+                [SESSION_STATUS.ABANDONED]: 'bg-gray-100 text-gray-800'
+            };
+
+            const statusLabels = {
+                [SESSION_STATUS.SUCCESS]: 'Réussie',
+                [SESSION_STATUS.FAILED]: 'Échouée',
+                [SESSION_STATUS.ABANDONED]: 'Abandonnée'
+            };
+
+            html += `
+                <div class="bg-white/90 rounded-xl p-6 shadow-lg border border-indigo-100 mt-4">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="px-2 py-1 rounded-full text-sm ${statusColors[session.status]}">
+                                    ${statusLabels[session.status]}
+                                </span>
+                                <span class="text-sm text-gray-500">
+                                    ${duration} min
+                                </span>
+                            </div>
+                            <p class="text-sm text-gray-600 mt-2">
+                                Du ${new Date(session.startDate).toLocaleString('fr-FR')} 
+                                au ${new Date(session.endDate).toLocaleString('fr-FR')}
+                            </p>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm text-gray-600">Étape atteinte</div>
+                            <div class="text-xl font-bold">${session.maxStep}/10</div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <div class="text-sm text-gray-600">Mise initiale</div>
+                            <div class="font-semibold">${session.initialAmount}€</div>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <div class="text-sm text-gray-600">Montant final</div>
+                            <div class="font-semibold">${session.currentAmount}€</div>
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-lg">
+                            <div class="text-sm text-gray-600">Progression</div>
+                            <div class="font-semibold ${progression >= 0 ? 'text-green-600' : 'text-red-600'}">
+                                ${progression > 0 ? '+' : ''}${progression}%
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+        });
+    }
+
+    html += '</div>';
+    container.innerHTML = html;
+}
+
+// État global
+let bets = [];
+let mise = 10;
+let isSyncing = false;
+let currentSession = null;
+let sessions = [];
+const sessionsRef = ref(db, 'sessions');
 
 // Gestion des Sessions
 async function startNewSession() {
@@ -280,237 +505,6 @@ async function deleteBet(betId) {
     updateProjections();
     updateStats();
     await saveToServer();
-}
-
-// Fonctions de mise à jour de l'interface
-function updateStats() {
-    const wonBets = bets.filter(b => b.status === STATUS.WON).length;
-    const lostBets = bets.filter(b => b.status === STATUS.LOST).length;
-    
-    const statsWon = document.getElementById('statsWon');
-    const statsLost = document.getElementById('statsLost');
-    
-    if (statsWon) statsWon.textContent = wonBets;
-    if (statsLost) statsLost.textContent = lostBets;
-}
-
-// Ajouter après la fonction updateStats et avant updateSessionsDisplay
-function updateBetsList() {
-    const betsListDiv = document.getElementById('betsList');
-    if (!betsListDiv) return;
-
-    betsListDiv.innerHTML = bets.map((bet, index) => `
-        <div class="glass-effect rounded-xl p-6 shadow-lg border border-indigo-100 mb-4">
-            <div class="flex justify-between items-start">
-                <div class="flex-1">
-                    <div class="flex items-center gap-2 mb-2">
-                        <h3 class="text-lg font-semibold text-gray-800">Pari #${index + 1}</h3>
-                        <div class="flex gap-2">
-                            ${bet.status === STATUS.PENDING ? `
-                                <button onclick="window.updateBetStatus('${bet.id}', '${STATUS.WON}')" 
-                                        class="text-sm px-3 py-1 bg-green-100 text-green-700 rounded-full hover:bg-green-200">
-                                    Gagné
-                                </button>
-                                <button onclick="window.updateBetStatus('${bet.id}', '${STATUS.LOST}')"
-                                        class="text-sm px-3 py-1 bg-red-100 text-red-700 rounded-full hover:bg-red-200">
-                                    Perdu
-                                </button>
-                            ` : bet.status === STATUS.WON ?
-                                '<span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">Gagné</span>' :
-                                '<span class="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm">Perdu</span>'
-                            }
-                        </div>
-                    </div>
-                    <div class="space-y-1">
-                        <p class="text-sm text-gray-600">
-                            <span class="font-medium">Match 1:</span> 
-                            ${bet.match1.description} 
-                            <span class="text-indigo-600 font-medium">(${bet.match1.cote})</span>
-                        </p>
-                        ${bet.match2.description ? `
-                            <p class="text-sm text-gray-600">
-                                <span class="font-medium">Match 2:</span> 
-                                ${bet.match2.description} 
-                                <span class="text-indigo-600 font-medium">(${bet.match2.cote})</span>
-                            </p>
-                        ` : ''}
-                        <p class="text-sm font-medium text-gray-800">
-                            Cote totale: <span class="text-indigo-600">${bet.totalOdd}</span>
-                        </p>
-                        ${bet.status === STATUS.WON ? `
-                            <p class="text-sm font-medium text-green-600">
-                                Gain: ${(currentSession.initialAmount * bet.totalOdd).toFixed(2)}€
-                            </p>
-                        ` : ''}
-                    </div>
-                </div>
-                <div class="flex gap-2">
-                    ${bet.status === STATUS.PENDING ? `
-                        <button onclick="window.deleteBet('${bet.id}')"
-                                class="p-2 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200">
-                            🗑️
-                        </button>
-                    ` : ''}
-                </div>
-            </div>
-        </div>
-    `).join('');
-}
-
-// Ajouter également la fonction updateProjections
-function updateProjections() {
-    const projectionsDiv = document.getElementById('projections');
-    if (!projectionsDiv) return;
-
-    const wonBets = bets.filter(b => b.status === STATUS.WON).length;
-    const projections = calculateProjections();
-
-    projectionsDiv.innerHTML = projections.map((proj, i) => `
-        <div class="projection-card p-3 rounded-xl text-center shadow-sm ${
-            i < wonBets
-                ? 'bg-gradient-to-br from-emerald-400 to-green-500 text-white'
-                : i === wonBets
-                ? 'bg-gradient-to-br from-violet-500 to-purple-600 text-white ring-2 ring-purple-200'
-                : 'bg-white/80 text-gray-800'
-        }">
-            <div class="text-xs font-medium">Étape</div>
-            <div class="text-xl font-bold mb-1">#${i + 1}</div>
-            <div class="font-semibold">${proj}€</div>
-        </div>
-    `).join('');
-}
-
-// Remplacer "[RESTE DE LA FONCTION updateSessionsDisplay ICI]" par ce qui suit
-// Fonction d'affichage des sessions
-function updateSessionsDisplay() {
-    const container = document.getElementById('sessions-container');
-    if (!container) return;
-
-    let html = '<div class="space-y-4">';
-    
-    // Affichage de la session courante
-    if (currentSession) {
-        const progression = Math.round((currentSession.currentAmount / currentSession.initialAmount - 1) * 100);
-        html += `
-            <div class="bg-white/90 rounded-xl p-6 shadow-lg border border-indigo-100">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="text-xl font-semibold text-gray-800">Session en cours</h3>
-                    <div class="flex gap-2">
-                        <button onclick="window.endSession('${SESSION_STATUS.SUCCESS}')" 
-                                class="px-3 py-1 bg-green-100 text-green-700 rounded-full hover:bg-green-200">
-                            Réussie
-                        </button>
-                        <button onclick="window.endSession('${SESSION_STATUS.FAILED}')"
-                                class="px-3 py-1 bg-red-100 text-red-700 rounded-full hover:bg-red-200">
-                            Échouée
-                        </button>
-                        <button onclick="window.endSession('${SESSION_STATUS.ABANDONED}')"
-                                class="px-3 py-1 bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200">
-                            Abandonner
-                        </button>
-                    </div>
-                </div>
-                <div class="grid grid-cols-4 gap-4">
-                    <div class="bg-white/50 p-4 rounded-lg">
-                        <div class="text-sm text-gray-600">Mise initiale</div>
-                        <div class="text-lg font-semibold">${currentSession.initialAmount}€</div>
-                    </div>
-                    <div class="bg-white/50 p-4 rounded-lg">
-                        <div class="text-sm text-gray-600">Montant actuel</div>
-                        <div class="text-lg font-semibold">${currentSession.currentAmount}€</div>
-                    </div>
-                    <div class="bg-white/50 p-4 rounded-lg">
-                        <div class="text-sm text-gray-600">Progression</div>
-                        <div class="text-lg font-semibold ${progression >= 0 ? 'text-green-600' : 'text-red-600'}">
-                            ${progression > 0 ? '+' : ''}${progression}%
-                        </div>
-                    </div>
-                    <div class="bg-white/50 p-4 rounded-lg">
-                        <div class="text-sm text-gray-600">Étape</div>
-                        <div class="text-lg font-semibold">${currentSession.maxStep}/10</div>
-                    </div>
-                </div>
-            </div>`;
-    }
-
-    // En-tête de la section des sessions
-    html += `
-        <div class="flex justify-between items-center">
-            <h3 class="text-xl font-semibold text-gray-800">Historique des sessions</h3>
-            ${!currentSession ? `
-                <button onclick="window.startNewSession()" 
-                        class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">
-                    Nouvelle Session
-                </button>
-            ` : ''}
-        </div>`;
-
-    // Liste des sessions terminées
-    if (sessions.length === 0) {
-        html += '<p class="text-center text-gray-600 py-4">Aucune session terminée</p>';
-    } else {
-        sessions.sort((a, b) => b.startDate.localeCompare(a.startDate)); // Tri par date décroissante
-        
-        sessions.forEach(session => {
-            const progression = Math.round((session.currentAmount / session.initialAmount - 1) * 100);
-            const duration = Math.round((new Date(session.endDate) - new Date(session.startDate)) / (1000 * 60)); // en minutes
-            
-            const statusColors = {
-                [SESSION_STATUS.SUCCESS]: 'bg-green-100 text-green-800',
-                [SESSION_STATUS.FAILED]: 'bg-red-100 text-red-800',
-                [SESSION_STATUS.ABANDONED]: 'bg-gray-100 text-gray-800'
-            };
-
-            const statusLabels = {
-                [SESSION_STATUS.SUCCESS]: 'Réussie',
-                [SESSION_STATUS.FAILED]: 'Échouée',
-                [SESSION_STATUS.ABANDONED]: 'Abandonnée'
-            };
-
-            html += `
-                <div class="bg-white/90 rounded-xl p-6 shadow-lg border border-indigo-100 mt-4">
-                    <div class="flex justify-between items-start mb-4">
-                        <div>
-                            <div class="flex items-center gap-2">
-                                <span class="px-2 py-1 rounded-full text-sm ${statusColors[session.status]}">
-                                    ${statusLabels[session.status]}
-                                </span>
-                                <span class="text-sm text-gray-500">
-                                    ${duration} min
-                                </span>
-                            </div>
-                            <p class="text-sm text-gray-600 mt-2">
-                                Du ${new Date(session.startDate).toLocaleString('fr-FR')} 
-                                au ${new Date(session.endDate).toLocaleString('fr-FR')}
-                            </p>
-                        </div>
-                        <div class="text-right">
-                            <div class="text-sm text-gray-600">Étape atteinte</div>
-                            <div class="text-xl font-bold">${session.maxStep}/10</div>
-                        </div>
-                    </div>
-                    <div class="grid grid-cols-3 gap-4">
-                        <div class="bg-gray-50 p-3 rounded-lg">
-                            <div class="text-sm text-gray-600">Mise initiale</div>
-                            <div class="font-semibold">${session.initialAmount}€</div>
-                        </div>
-                        <div class="bg-gray-50 p-3 rounded-lg">
-                            <div class="text-sm text-gray-600">Montant final</div>
-                            <div class="font-semibold">${session.currentAmount}€</div>
-                        </div>
-                        <div class="bg-gray-50 p-3 rounded-lg">
-                            <div class="text-sm text-gray-600">Progression</div>
-                            <div class="font-semibold ${progression >= 0 ? 'text-green-600' : 'text-red-600'}">
-                                ${progression > 0 ? '+' : ''}${progression}%
-                            </div>
-                        </div>
-                    </div>
-                </div>`;
-        });
-    }
-
-    html += '</div>';
-    container.innerHTML = html;
 }
 
 // Synchronisation et sauvegarde
