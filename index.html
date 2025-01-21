@@ -132,9 +132,10 @@
     </div>
 
     <!-- Scripts -->
-    <script type="module">
+    <!-- Dans votre index.html, modifiez les balises script -->
+<script type="module">
     import { initializeBets, syncData, addBet, updateBetStatus, deleteBet, testFirebaseConnection, openEditModal, closeEditModal, updateBet } from './bets-logic.js';
-    import { loadSessions, updateSessionProgress } from './sessions-logic.js';
+    import { loadSessions, updateSessionProgress, startNewSession, endCurrentSession } from './sessions-logic.js';
     
     // Rendre les fonctions disponibles globalement
     window.syncData = syncData;
@@ -145,12 +146,15 @@
     window.openEditModal = openEditModal;
     window.closeEditModal = closeEditModal;
     window.updateBet = updateBet;
+    window.startNewSession = startNewSession;
+    window.endCurrentSession = endCurrentSession;
+    window.updateSessionProgress = updateSessionProgress;
 
     // Event listener pour la mise initiale
-    document.getElementById('miseInitiale').addEventListener('change', (e) => {
+    document.getElementById('miseInitiale').addEventListener('change', async (e) => {
         window.mise = parseFloat(e.target.value);
-        window.updateProjections();
-        window.saveToServer();
+        await updateProjections();
+        await saveToServer();
     });
 
     // Initialisation
