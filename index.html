@@ -99,6 +99,11 @@
             <h2 class="text-xl font-semibold mb-4 text-gray-800">Projections des gains</h2>
             <div id="projections" class="grid grid-cols-5 gap-3"></div>
         </div>
+        <div class="bg-white/80 backdrop-blur-lg rounded-xl p-6 shadow-lg">
+    <div id="sessions-container">
+        <!-- Le contenu sera généré dynamiquement par sessions-logic.js -->
+    </div>
+</div>
 
         <!-- Nouveau pari -->
         <div class="glass-effect rounded-xl p-6 shadow-lg border border-indigo-100">
@@ -128,30 +133,39 @@
 
     <!-- Scripts -->
     <script type="module">
-        import { initializeBets, syncData, addBet, updateBetStatus, deleteBet, testFirebaseConnection, openEditModal, closeEditModal, updateBet } from './bets-logic.js';
-        
-        // Rendre les fonctions disponibles globalement
-        window.syncData = syncData;
-        window.addBet = addBet;
-        window.updateBetStatus = updateBetStatus;
-        window.deleteBet = deleteBet;
-        window.testFirebaseConnection = testFirebaseConnection;
-        window.openEditModal = openEditModal;
-        window.closeEditModal = closeEditModal;
-        window.updateBet = updateBet;
+    import { initializeBets, syncData, addBet, updateBetStatus, deleteBet, testFirebaseConnection, openEditModal, closeEditModal, updateBet } from './bets-logic.js';
+    import { loadSessions, updateSessionProgress } from './sessions-logic.js';
+    
+    // Rendre les fonctions disponibles globalement
+    window.syncData = syncData;
+    window.addBet = addBet;
+    window.updateBetStatus = updateBetStatus;
+    window.deleteBet = deleteBet;
+    window.testFirebaseConnection = testFirebaseConnection;
+    window.openEditModal = openEditModal;
+    window.closeEditModal = closeEditModal;
+    window.updateBet = updateBet;
 
-        // Event listener pour la mise initiale
-        document.getElementById('miseInitiale').addEventListener('change', (e) => {
-            window.mise = parseFloat(e.target.value);
-            window.updateProjections();
-            window.saveToServer();
-        });
+    // Event listener pour la mise initiale
+    document.getElementById('miseInitiale').addEventListener('change', (e) => {
+        window.mise = parseFloat(e.target.value);
+        window.updateProjections();
+        window.saveToServer();
+    });
 
-        // Initialisation
-        initializeBets();
+    // Initialisation
+    await Promise.all([
+        initializeBets(),
+        loadSessions()
+    ]);
 
-        // Synchronisation périodique
-        setInterval(syncData, 30000);
-    </script>
+    // Synchronisation périodique
+    setInterval(async () => {
+        await Promise.all([
+            syncData(),
+            loadSessions()
+        ]);
+    }, 30000);
+</script>
 </body>
 </html>
