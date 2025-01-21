@@ -354,15 +354,21 @@ export async function deleteBet(betId) {
 
 // Mise à jour du statut d'un pari
 export async function updateBetStatus(betId, status) {
-   const betIndex = bets.findIndex(b => b.id === betId);
-   if (betIndex !== -1) {
-       bets[betIndex].status = status;
-       updateBetsList();
-       updateProjections();
-       updateStats();
-       await saveToServer();
-   }
-}
+    const betIndex = bets.findIndex(b => b.id === betId);
+    if (betIndex !== -1) {
+        bets[betIndex].status = status;
+        
+        // Mise à jour des paris et de la session
+        updateBetsList();
+        updateProjections();
+        updateStats();
+        
+        // Mettre à jour la progression de la session
+        const wonBets = bets.filter(b => b.status === 'won');
+        window.updateSessionProgress(wonBets);
+        
+        await saveToServer();
+    }
 
 // Initialisation
 export async function initializeBets() {
